@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  aurakit:
+    name: AuraKit tests
+    runs-on: ubuntu-latest
+    # AuraKit depends on Foundation alone, so the core algorithms can be tested on a
+    # Linux runner in seconds instead of queueing for a macOS one.
+    container: swift:6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: swift test
+        working-directory: Packages/AuraKit
