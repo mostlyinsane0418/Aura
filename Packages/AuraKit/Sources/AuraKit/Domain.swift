@@ -39,12 +39,17 @@ public struct Place: Hashable, Sendable, Codable {
     public var countryCode: String?
     public var coordinate: Coordinate
 
+    /// A ready-made, regionally correct label supplied by the geocoder, when it has
+    /// one. Preferred over anything assembled here — see `displayName`.
+    public var formattedName: String?
+
     public init(
         name: String? = nil,
         locality: String? = nil,
         administrativeArea: String? = nil,
         country: String? = nil,
         countryCode: String? = nil,
+        formattedName: String? = nil,
         coordinate: Coordinate
     ) {
         self.name = name
@@ -52,12 +57,19 @@ public struct Place: Hashable, Sendable, Codable {
         self.administrativeArea = administrativeArea
         self.country = country
         self.countryCode = countryCode
+        self.formattedName = formattedName
         self.coordinate = coordinate
     }
 
     /// What the user actually reads on a journey card: "Bristol", "Bristol, England",
     /// or a graceful fallback rather than "Unknown Location".
+    ///
+    /// The fallback concatenation is genuinely a fallback. Joining components with a
+    /// comma produces confidently wrong labels in plenty of the world — which level of
+    /// administrative division disambiguates a city, and in which order, is regional —
+    /// so a label the geocoder formatted itself always wins.
     public var displayName: String {
+        if let formattedName, !formattedName.isEmpty { return formattedName }
         if let locality, let country, country != locality {
             return "\(locality), \(country)"
         }

@@ -295,7 +295,7 @@ Aura (SwiftUI, iOS 26 minimum)
 │   ├── PhotoLibrary     PHAsset streaming, change observation, thumbnail cache
 │   ├── Ingest           orchestrates: fetch → cluster → geocode → score → persist
 │   ├── Clustering       spatio-temporal DBSCAN
-│   ├── Geocoding        CLGeocoder + aggressive local cache (rate-limited API)
+│   ├── Geocoding        MKReverseGeocodingRequest + aggressive local cache (rate-limited API)
 │   ├── VisionAnalysis   aesthetics, faces, saliency, scene labels, mood
 │   ├── SpeechService    record + on-device transcription
 │   ├── Narrative        Foundation Models wrapper with template fallback

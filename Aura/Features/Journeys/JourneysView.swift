@@ -39,7 +39,6 @@ struct JourneysView: View {
                         ProgressView()
                     } else {
                         Button {
-                            Haptics.snap()
                             ingest.refresh()
                         } label: {
                             Image(systemName: "arrow.clockwise")
@@ -88,14 +87,14 @@ struct JourneysView: View {
 }
 
 /// Cards should feel pressable, not tappable: a small, springy scale rather than a
-/// highlight colour, with the settle haptic on release.
+/// highlight colour, with a soft tap on release.
 private struct CardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(AuraTheme.Motion.standard, value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { _, isPressed in
-                if !isPressed { Haptics.settle() }
+            .sensoryFeedback(Haptics.settle, trigger: configuration.isPressed) { wasPressed, isPressed in
+                wasPressed && !isPressed
             }
     }
 }

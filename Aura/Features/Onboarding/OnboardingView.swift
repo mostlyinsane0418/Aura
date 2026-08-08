@@ -8,6 +8,7 @@ import SwiftUI
 struct OnboardingView: View {
     @Environment(IngestService.self) private var ingest
     @State private var hasAppeared = false
+    @State private var hasRequestedAccess = false
 
     var body: some View {
         VStack(spacing: AuraTheme.Spacing.loose) {
@@ -41,7 +42,7 @@ struct OnboardingView: View {
             .padding(.horizontal, AuraTheme.Spacing.loose)
 
             Button {
-                Haptics.settle()
+                hasRequestedAccess = true
                 ingest.requestAccess()
             } label: {
                 Text("Find my journeys")
@@ -54,6 +55,7 @@ struct OnboardingView: View {
             .padding(.horizontal, AuraTheme.Spacing.loose)
             .padding(.bottom, AuraTheme.Spacing.generous)
             .opacity(hasAppeared ? 1 : 0)
+            .sensoryFeedback(Haptics.settle, trigger: hasRequestedAccess)
         }
         .task {
             withAnimation(AuraTheme.Motion.gentle.delay(0.15)) { hasAppeared = true }
