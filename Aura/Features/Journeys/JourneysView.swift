@@ -4,6 +4,7 @@ import SwiftUI
 struct JourneysView: View {
     @Environment(IngestService.self) private var ingest
     @Namespace private var cardTransition
+    @State private var isShowingDiagnostics = false
 
     var body: some View {
         NavigationStack {
@@ -47,6 +48,7 @@ struct JourneysView: View {
                 }
             }
             .refreshable { ingest.refresh() }
+            .sheet(isPresented: $isShowingDiagnostics) { DiagnosticsView() }
         }
     }
 
@@ -80,6 +82,13 @@ struct JourneysView: View {
                     .font(AuraTheme.Text.caption)
                     .foregroundStyle(AuraTheme.Palette.secondaryText)
                     .multilineTextAlignment(.center)
+
+                // An empty feed is sometimes correct and sometimes a library with no
+                // location data at all. Offer the explanation rather than leaving the
+                // user to guess which one this is.
+                Button("Why is this empty?") { isShowingDiagnostics = true }
+                    .font(AuraTheme.Text.caption)
+                    .padding(.top, AuraTheme.Spacing.tight)
             }
         }
         .padding(.horizontal, AuraTheme.Spacing.loose)

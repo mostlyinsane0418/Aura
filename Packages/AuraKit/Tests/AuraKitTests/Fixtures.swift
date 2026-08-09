@@ -23,6 +23,9 @@ enum Fixtures {
     /// ~24km from Lisbon: same trip, different chapter.
     static let sintra = Coordinate(latitude: 38.7979, longitude: -9.3907)
     static let tokyo = Coordinate(latitude: 35.6762, longitude: 139.6503)
+    /// ~80km from Tokyo: a day trip out of the city you are staying in, which is far
+    /// enough to cluster separately but is unmistakably the same holiday.
+    static let hakone = Coordinate(latitude: 35.2324, longitude: 139.1069)
 
     /// A burst of photos at one place, spread evenly across a window of hours.
     static func burst(

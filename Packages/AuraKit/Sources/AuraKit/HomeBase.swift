@@ -27,6 +27,21 @@ public enum HomeBaseInference {
     /// enough that a city is one bucket, fine enough that neighbouring cities are not.
     static let cellSize = 0.25
 
+    /// How many located photos fall in the night-time window — the evidence available
+    /// to `infer`. Below `minimumSupport` no home base is produced at all.
+    public static func nightTimeSampleCount(
+        from seeds: [MemorySeed],
+        calendar: Calendar = Calendar(identifier: .gregorian),
+        nightStartHour: Int = 22,
+        nightEndHour: Int = 6
+    ) -> Int {
+        seeds.count { seed in
+            guard seed.coordinate != nil else { return false }
+            let hour = calendar.component(.hour, from: seed.createdAt)
+            return hour >= nightStartHour || hour < nightEndHour
+        }
+    }
+
     public static func infer(
         from seeds: [MemorySeed],
         calendar: Calendar = Calendar(identifier: .gregorian),
