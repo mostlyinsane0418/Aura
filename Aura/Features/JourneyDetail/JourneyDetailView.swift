@@ -28,6 +28,7 @@ struct JourneyDetailView: View {
         .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .tint(accent)
+        .sensoryFeedback(Haptics.snap, trigger: selection)
         .fullScreenCover(item: $selection) { selection in
             MemoryViewer(memoryIDs: journey.memoryIDs, initialMemoryID: selection.id)
         }
@@ -88,7 +89,6 @@ struct JourneyDetailView: View {
             LazyVGrid(columns: columns, spacing: AuraTheme.Spacing.hairline) {
                 ForEach(chapter.memoryIDs, id: \.self) { memoryID in
                     Button {
-                        Haptics.snap()
                         selection = MemorySelection(id: memoryID)
                     } label: {
                         MemoryImage(memoryID: memoryID, targetSize: CGSize(width: 300, height: 300))

@@ -178,11 +178,13 @@ location in its own database separately from file EXIF, so `PHAsset.location` is
   excluded from Journeys (but still appears on the map).
 - **No home base** (new phone, no night-time location data): fall back to duration — a cluster spanning
   ≥ 2 days is treated as travel.
+- **Time has the final say.** Qualifying clusters whose date ranges are within `ε_time` of each other
+  are merged into one Journey, because a person cannot be on two trips at once.
 - **Chapters:** re-run the same clustering inside each Journey with `ε_space = 5 km`, `ε_time = 6 h`,
   `minPts = 3`. Photos the tighter pass rejects as noise are folded into the nearest chapter in time
   rather than lost.
 
-**Two parameter choices that are load-bearing, both found by testing rather than reasoning:**
+**Three design choices that are load-bearing, all found by testing rather than reasoning:**
 
 1. *`ε_time` must exceed a night.* People shoot during the day and stop at dinner, so consecutive days
    of one trip are routinely 20+ hours apart. At 18 hours a week in Lisbon fragments into seven
@@ -193,6 +195,13 @@ location in its own database separately from file EXIF, so `PHAsset.location` is
    that moves 25 km between towns *and* sleeps overnight spends most of both budgets and falls apart —
    which is the shape of an ordinary holiday. Separate thresholds fix this and match the published
    ST-DBSCAN formulation.
+3. *Density clustering alone splits one holiday into several.* A day trip out of the city you are
+   staying in — Hakone from Tokyo, 80 km — exceeds any defensible `ε_space` and comes back as its own
+   cluster, presenting one week in Japan as three journeys. Raising `ε_space` is the wrong fix: at
+   80 km it also merges genuinely separate trips to neighbouring cities. Merging qualifying clusters
+   that overlap in time is the right one, and it is bounded by `ε_time`, so two trips to the same
+   place a month apart stay separate. Found by running the real pipeline over a synthetic library
+   with `aura-probe`, not by unit tests, which had no fixture shaped like a far day trip.
 
 **Photos without location** (screenshots, AirDropped images, older cameras) are absorbed into the
 Journey whose date range contains them, with a 12-hour grace window either side so an airport-lounge
@@ -295,7 +304,7 @@ Aura (SwiftUI, iOS 26 minimum)
 │   ├── PhotoLibrary     PHAsset streaming, change observation, thumbnail cache
 │   ├── Ingest           orchestrates: fetch → cluster → geocode → score → persist
 │   ├── Clustering       spatio-temporal DBSCAN
-│   ├── Geocoding        CLGeocoder + aggressive local cache (rate-limited API)
+│   ├── Geocoding        MKReverseGeocodingRequest + aggressive local cache (rate-limited API)
 │   ├── VisionAnalysis   aesthetics, faces, saliency, scene labels, mood
 │   ├── SpeechService    record + on-device transcription
 │   ├── Narrative        Foundation Models wrapper with template fallback

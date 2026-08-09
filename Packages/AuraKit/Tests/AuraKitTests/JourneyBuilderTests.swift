@@ -57,6 +57,65 @@ final class JourneyBuilderTests: XCTestCase {
         XCTAssertEqual(Geo.distanceKm(journeys[1].centroid!, Fixtures.lisbon), 0, accuracy: 1)
     }
 
+    /// A day trip out of the city you are staying in is further from your hotel than
+    /// any sane spatial epsilon allows, so density clustering hands it back as its own
+    /// cluster. It is still the same holiday.
+    func testAFarDayTripDuringATripStaysInTheSameJourney() {
+        let seeds = homeNights
+            + Fixtures.burst("tky-d1", at: Fixtures.tokyo, day: 100, startHour: 9, spanHours: 6)
+            + Fixtures.burst("hak", at: Fixtures.hakone, day: 101, startHour: 9, spanHours: 6)
+            + Fixtures.burst("tky-d3", at: Fixtures.tokyo, day: 102, startHour: 9, spanHours: 6)
+
+        let journeys = builder.build(from: seeds.shuffled()).journeys
+
+        XCTAssertEqual(journeys.count, 1)
+        XCTAssertEqual(journeys[0].memoryIDs.count, 24)
+        XCTAssertEqual(journeys[0].dayCount, 3)
+    }
+
+    /// Merging is bounded by time: trips separated by a spell back home stay apart
+    /// even when the destinations are close together.
+    func testTripsSeparatedByTimeAreNotMerged() {
+        let seeds = homeNights
+            + Fixtures.burst("lis-a1", at: Fixtures.lisbon, day: 10, startHour: 9, spanHours: 6)
+            + Fixtures.burst("lis-a2", at: Fixtures.lisbon, day: 11, startHour: 9, spanHours: 6)
+            + Fixtures.burst("lis-b1", at: Fixtures.lisbon, day: 40, startHour: 9, spanHours: 6)
+            + Fixtures.burst("lis-b2", at: Fixtures.lisbon, day: 41, startHour: 9, spanHours: 6)
+
+        XCTAssertEqual(builder.build(from: seeds).journeys.count, 2)
+    }
+
+    // MARK: - Diagnostics
+
+    func testDiagnosticsExplainWhyAClusterWasRejected() {
+        let seeds = homeNights + Fixtures.burst("bath", at: Fixtures.bath, day: 20)
+        let diagnostics = builder.build(from: seeds).diagnostics
+
+        XCTAssertEqual(diagnostics.totalMemories, seeds.count)
+        XCTAssertEqual(diagnostics.locatedMemories, seeds.count)
+        XCTAssertEqual(diagnostics.unlocatedMemories, 0)
+        XCTAssertEqual(diagnostics.nightTimeLocatedMemories, homeNights.count)
+        XCTAssertEqual(diagnostics.acceptedClusters, 0)
+
+        let bath = try! XCTUnwrap(diagnostics.clusters.first {
+            $0.startDate == Fixtures.date(day: 20, hour: 10)
+        })
+        guard case let .tooCloseToHome(distance, radius) = bath.outcome else {
+            return XCTFail("expected a home-radius rejection, got \(bath.outcome)")
+        }
+        XCTAssertEqual(distance, Geo.distanceKm(Fixtures.bath, Fixtures.bristol), accuracy: 1)
+        XCTAssertEqual(radius, builder.configuration.homeRadiusKm)
+    }
+
+    func testDiagnosticsCountPhotosWithNoCoordinate() {
+        let seeds = homeNights + lisbonTrip()
+            + Fixtures.burst("screenshot", at: nil, day: 10, count: 3)
+        let diagnostics = builder.build(from: seeds).diagnostics
+
+        XCTAssertEqual(diagnostics.unlocatedMemories, 3)
+        XCTAssertEqual(diagnostics.locatedMemories, seeds.count - 3)
+    }
+
     // MARK: - Chapters
 
     func testJourneySplitsIntoChaptersByPlace() {

@@ -54,3 +54,37 @@ Open `Aura.xcodeproj`, select the `Aura` scheme, and run on a device or simulato
 photos in the library. On first launch Aura asks for photo access; limited access
 ("Choose Photos") is fully supported and produces a smaller but otherwise identical
 experience.
+
+### Testing in the Simulator
+
+The Simulator's stock photos carry **no GPS metadata**, so Aura correctly finds no
+journeys in them and there is nothing to look at. Generate a library that does have
+coordinates:
+
+```sh
+python3 -m pip install piexif Pillow
+python3 Tools/generate_sample_library.py --out ~/aura-sample-library
+xcrun simctl addmedia booted ~/aura-sample-library/*.jpg
+```
+
+That produces a Bristol home base, three trips that should each become one journey
+(Tokyo including an 80km day trip to Hakone, Lisbon with Sintra and Cascais,
+Edinburgh), a day trip to Bath that should deliberately *not* become a journey, and a
+handful of location-less "screenshots" that should be absorbed into the trip they
+happened during. Every image is labelled with its place and date, so a mis-grouping is
+visible at a glance.
+
+## Diagnosing an empty feed
+
+An empty feed has several very different causes that look identical from outside, so
+the app shows its working: tap **Why is this empty?** on the empty state for photo
+counts, how many have coordinates, the inferred home base, and the accept/reject reason
+for every cluster.
+
+The same analysis runs from the command line over any folder of images, with no phone
+and no app build involved:
+
+```sh
+python3 Tools/probe_library.py ~/aura-sample-library > library.json
+(cd Packages/AuraKit && swift run aura-probe < ../../library.json)
+```

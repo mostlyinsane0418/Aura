@@ -24,6 +24,7 @@ final class StoredJourney {
     var administrativeArea: String?
     var country: String?
     var countryCode: String?
+    var formattedName: String?
 
     /// Set only when the user renames a journey, so re-running ingest can refresh
     /// everything else without stepping on their edit.
@@ -49,6 +50,7 @@ final class StoredJourney {
         administrativeArea = place?.administrativeArea
         country = place?.country
         countryCode = place?.countryCode
+        formattedName = place?.formattedName
     }
 
     var coordinate: Coordinate? {
@@ -64,6 +66,7 @@ final class StoredJourney {
             administrativeArea: administrativeArea,
             country: country,
             countryCode: countryCode,
+            formattedName: formattedName,
             coordinate: coordinate
         )
     }

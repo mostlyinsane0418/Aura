@@ -1,17 +1,17 @@
 import AuraKit
 import CoreLocation
+import MapKit
 
-/// Turns a journey's centroid into "Bristol, United Kingdom".
+/// Turns a journey's centroid into "Bristol, England".
 ///
-/// `CLGeocoder` is rate limited and will start failing under a burst, so requests are
-/// serialised, spaced, and cached hard. A journey's place name never changes, so a
+/// Reverse geocoding is rate limited and will start failing under a burst, so requests
+/// are serialised, spaced, and cached hard. A journey's place name never changes, so a
 /// cache hit is always correct — and after the first ingest almost everything is a
 /// cache hit.
 actor GeocodingService {
 
     static let shared = GeocodingService()
 
-    private let geocoder = CLGeocoder()
     private var cache: [CacheKey: Place] = [:]
     private var lastRequest: Date?
 
@@ -44,19 +44,32 @@ actor GeocodingService {
         lastRequest = Date()
 
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        guard let placemark = try? await geocoder.reverseGeocodeLocation(location).first else {
+
+        // The initialiser is failable rather than throwing: it returns nil for
+        // coordinates that are not valid at all, which a cluster centroid should never
+        // be, but a corrupt asset location could produce.
+        guard let request = MKReverseGeocodingRequest(location: location),
+              let mapItems = try? await request.mapItems,
+              let mapItem = mapItems.first else {
             // A failure here is not worth surfacing: the journey still has its dates,
-            // its photos, and its map. It simply reads as "Somewhere" until the next
-            // ingest retries it.
+            // its photos, and its map. It reads as "Somewhere" until the next ingest
+            // retries it.
             return nil
         }
 
+        // MapKit stopped vending structured postal components in iOS 26 — there is no
+        // `CNPostalAddress` on a geocoded map item any more. What it offers instead is
+        // pre-formatted strings that are correct for the region in question, which is
+        // the better primitive for a label anyway: `cityWithContext` knows that a US
+        // city wants its state and a French one does not.
+        let representations = mapItem.addressRepresentations
+        let city = representations?.city
+
         let place = Place(
-            name: placemark.name,
-            locality: placemark.locality ?? placemark.subAdministrativeArea,
-            administrativeArea: placemark.administrativeArea,
-            country: placemark.country,
-            countryCode: placemark.isoCountryCode,
+            name: city ?? mapItem.address?.shortAddress,
+            locality: city,
+            country: representations?.region,
+            formattedName: representations?.cityWithContext,
             coordinate: coordinate
         )
         cache[key] = place

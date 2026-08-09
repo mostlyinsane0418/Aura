@@ -4,6 +4,7 @@ import SwiftUI
 struct JourneysView: View {
     @Environment(IngestService.self) private var ingest
     @Namespace private var cardTransition
+    @State private var isShowingDiagnostics = false
 
     var body: some View {
         NavigationStack {
@@ -39,7 +40,6 @@ struct JourneysView: View {
                         ProgressView()
                     } else {
                         Button {
-                            Haptics.snap()
                             ingest.refresh()
                         } label: {
                             Image(systemName: "arrow.clockwise")
@@ -48,6 +48,7 @@ struct JourneysView: View {
                 }
             }
             .refreshable { ingest.refresh() }
+            .sheet(isPresented: $isShowingDiagnostics) { DiagnosticsView() }
         }
     }
 
@@ -81,6 +82,13 @@ struct JourneysView: View {
                     .font(AuraTheme.Text.caption)
                     .foregroundStyle(AuraTheme.Palette.secondaryText)
                     .multilineTextAlignment(.center)
+
+                // An empty feed is sometimes correct and sometimes a library with no
+                // location data at all. Offer the explanation rather than leaving the
+                // user to guess which one this is.
+                Button("Why is this empty?") { isShowingDiagnostics = true }
+                    .font(AuraTheme.Text.caption)
+                    .padding(.top, AuraTheme.Spacing.tight)
             }
         }
         .padding(.horizontal, AuraTheme.Spacing.loose)
@@ -88,14 +96,14 @@ struct JourneysView: View {
 }
 
 /// Cards should feel pressable, not tappable: a small, springy scale rather than a
-/// highlight colour, with the settle haptic on release.
+/// highlight colour, with a soft tap on release.
 private struct CardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(AuraTheme.Motion.standard, value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { _, isPressed in
-                if !isPressed { Haptics.settle() }
+            .sensoryFeedback(Haptics.settle, trigger: configuration.isPressed) { wasPressed, isPressed in
+                wasPressed && !isPressed
             }
     }
 }

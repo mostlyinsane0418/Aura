@@ -32,6 +32,9 @@ final class IngestService {
     private(set) var phase: Phase = .idle
     private(set) var journeys: [Journey] = []
     private(set) var homeBase: HomeBase?
+    /// Why the last build produced the journeys it did. Surfaced in the app so an
+    /// empty feed can be explained rather than merely apologised for.
+    private(set) var diagnostics: BuildDiagnostics?
 
     private let library: PhotoLibraryServing
     private let builder: JourneyBuilder
@@ -121,6 +124,7 @@ final class IngestService {
 
     private func apply(_ result: JourneyBuildResult) {
         homeBase = result.homeBase
+        diagnostics = result.diagnostics
 
         // Carry over anything already resolved so a refresh never regresses a journey
         // from "Bristol" back to "Somewhere" while it re-geocodes.

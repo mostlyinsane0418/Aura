@@ -1,29 +1,26 @@
-import UIKit
+import SwiftUI
 
 /// Four sensations, each with exactly one meaning.
 ///
-/// Haptics stop meaning anything the moment they fire on every touch, so the API is
-/// deliberately a closed vocabulary rather than a passthrough to `UIFeedbackGenerator`:
+/// Haptics stop meaning anything the moment they fire on every touch, so this is
+/// deliberately a closed vocabulary rather than a passthrough to the feedback API:
 /// adding a fifth kind of buzz should require editing this file and thinking about it.
+///
+/// These are `SensoryFeedback` values rather than `UIFeedbackGenerator` calls so they
+/// are attached to a state change with `.sensoryFeedback(_:trigger:)`. SwiftUI then
+/// owns the timing and the main-actor hop, and a haptic cannot drift out of sync with
+/// the animation it belongs to.
 enum Haptics {
 
     /// A card settled into place.
-    static func settle() {
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-    }
+    static let settle: SensoryFeedback = .impact(flexibility: .soft)
 
     /// You snapped onto something — a carousel item, a pin, a chapter.
-    static func snap() {
-        UISelectionFeedbackGenerator().selectionChanged()
-    }
+    static let snap: SensoryFeedback = .selection
 
     /// An artifact materialised: the polaroid finished developing.
-    static func materialise() {
-        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-    }
+    static let materialise: SensoryFeedback = .impact(flexibility: .rigid)
 
     /// An export completed.
-    static func succeeded() {
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-    }
+    static let succeeded: SensoryFeedback = .success
 }

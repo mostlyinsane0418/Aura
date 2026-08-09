@@ -74,7 +74,7 @@ struct MemoryViewer: View {
                     }
                 }
         )
-        .onChange(of: currentID) { _, _ in Haptics.snap() }
+        .sensoryFeedback(Haptics.snap, trigger: currentID)
         .statusBarHidden()
     }
 }

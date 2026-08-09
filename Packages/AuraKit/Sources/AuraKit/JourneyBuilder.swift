@@ -6,6 +6,9 @@ public struct JourneyBuildResult: Sendable {
     /// Memories that belong to no journey — everyday life, and unlocated photos that
     /// fall outside every journey's window. Still shown on the map, never in the feed.
     public let unassignedMemoryIDs: [String]
+    /// Why each cluster was accepted or rejected. An empty feed is otherwise
+    /// indistinguishable from a broken one.
+    public let diagnostics: BuildDiagnostics
 }
 
 /// Turns a flat library into journeys and chapters.
@@ -43,23 +46,39 @@ public struct JourneyBuilder: Sendable {
             minimumPoints: configuration.minimumPoints
         )
 
-        var journeys: [Journey] = []
+        var accepted: [[MemorySeed]] = []
         var assigned = Set<String>()
+        var reports: [BuildDiagnostics.ClusterReport] = []
 
         for cluster in clusters {
             let members = cluster.map { located[$0] }
-            guard qualifiesAsJourney(members, home: home) else { continue }
+            let centroid = Geo.centroid(of: members.compactMap(\.coordinate))
+            let verdict = outcome(for: members, home: home)
 
-            let coordinates = members.compactMap(\.coordinate)
-            let journey = Journey(
+            reports.append(BuildDiagnostics.ClusterReport(
+                memoryCount: members.count,
+                startDate: members.first!.createdAt,
+                endDate: members.last!.createdAt,
+                centroid: centroid,
+                distanceFromHomeKm: home.flatMap { home in
+                    centroid.map { Geo.distanceKm($0, home.coordinate) }
+                },
+                outcome: verdict
+            ))
+
+            guard verdict.isAccepted else { continue }
+            accepted.append(members)
+        }
+
+        var journeys = merge(accepted).map { members -> Journey in
+            assigned.formUnion(members.map(\.id))
+            return Journey(
                 memoryIDs: members.map(\.id),
                 chapters: chapters(for: members),
                 startDate: members.first!.createdAt,
                 endDate: members.last!.createdAt,
-                centroid: Geo.centroid(of: coordinates)
+                centroid: Geo.centroid(of: members.compactMap(\.coordinate))
             )
-            journeys.append(journey)
-            assigned.formUnion(journey.memoryIDs)
         }
 
         journeys = absorbUnlocated(unlocated, into: journeys, assigned: &assigned)
@@ -69,8 +88,50 @@ public struct JourneyBuilder: Sendable {
         return JourneyBuildResult(
             journeys: journeys,
             homeBase: home,
-            unassignedMemoryIDs: unassigned
+            unassignedMemoryIDs: unassigned,
+            diagnostics: BuildDiagnostics(
+                totalMemories: seeds.count,
+                locatedMemories: located.count,
+                nightTimeLocatedMemories: HomeBaseInference.nightTimeSampleCount(
+                    from: seeds,
+                    calendar: calendar
+                ),
+                unclusteredLocatedMemories: located.count - clusters.reduce(0) { $0 + $1.count },
+                clusters: reports
+            )
         )
+    }
+
+    // MARK: - Merging
+
+    /// Stitches clusters that overlap in time back into a single journey.
+    ///
+    /// Density clustering splits on distance, but a person cannot be on two trips at
+    /// once. A day trip out of the city you are staying in — Hakone from Tokyo, 80km —
+    /// exceeds any sane spatial epsilon and arrives here as its own cluster, which
+    /// would present a single holiday as three. Widening the epsilon instead is the
+    /// wrong fix: it would also merge genuinely separate trips to neighbouring places.
+    ///
+    /// So time gets the final say. Clusters whose date ranges touch, or sit within the
+    /// same temporal epsilon used for clustering, describe one continuous period away
+    /// and are merged.
+    func merge(_ clusters: [[MemorySeed]]) -> [[MemorySeed]] {
+        guard clusters.count > 1 else { return clusters }
+
+        let ordered = clusters.sorted { $0.first!.createdAt < $1.first!.createdAt }
+        let gap = configuration.temporalEpsilonHours * 3600
+
+        var merged: [[MemorySeed]] = [ordered[0]]
+        for cluster in ordered.dropFirst() {
+            let currentEnd = merged[merged.count - 1].last!.createdAt
+            if cluster.first!.createdAt <= currentEnd.addingTimeInterval(gap) {
+                merged[merged.count - 1].append(contentsOf: cluster)
+                merged[merged.count - 1].sort { $0.createdAt < $1.createdAt }
+            } else {
+                merged.append(cluster)
+            }
+        }
+        return merged
     }
 
     // MARK: - Journey qualification
@@ -83,18 +144,32 @@ public struct JourneyBuilder: Sendable {
     /// location data — we cannot tell "away" from "here", so we fall back to
     /// duration: a multi-day cluster is a trip often enough to be a safe default.
     func qualifiesAsJourney(_ members: [MemorySeed], home: HomeBase?) -> Bool {
-        guard members.count >= configuration.minimumJourneyMemories else { return false }
+        outcome(for: members, home: home).isAccepted
+    }
 
-        if let home, let centroid = Geo.centroid(of: members.compactMap(\.coordinate)) {
-            return Geo.distanceKm(centroid, home.coordinate) >= configuration.homeRadiusKm
+    func outcome(for members: [MemorySeed], home: HomeBase?) -> BuildDiagnostics.ClusterOutcome {
+        guard members.count >= configuration.minimumJourneyMemories else {
+            return .tooFewMemories(
+                count: members.count,
+                minimum: configuration.minimumJourneyMemories
+            )
         }
 
-        let span = calendar.dateComponents(
+        if let home, let centroid = Geo.centroid(of: members.compactMap(\.coordinate)) {
+            let distance = Geo.distanceKm(centroid, home.coordinate)
+            return distance >= configuration.homeRadiusKm
+                ? .accepted
+                : .tooCloseToHome(distanceKm: distance, radiusKm: configuration.homeRadiusKm)
+        }
+
+        let span = (calendar.dateComponents(
             [.day],
             from: members.first!.createdAt,
             to: members.last!.createdAt
-        ).day ?? 0
-        return span + 1 >= configuration.minimumJourneyDays
+        ).day ?? 0) + 1
+        return span >= configuration.minimumJourneyDays
+            ? .accepted
+            : .tooShort(days: span, minimumDays: configuration.minimumJourneyDays)
     }
 
     // MARK: - Chapters
